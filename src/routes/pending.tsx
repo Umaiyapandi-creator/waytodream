@@ -29,11 +29,13 @@ function PendingPage() {
   };
 
   useEffect(() => {
-    if (!user) return;
-    if (user.approvalStatus === "approved") {
-      goToDashboard();
-      return;
-    }
+  if (!user) return;
+
+  // Innovators can access the dashboard without approval.
+  if (user.role === "innovator") {
+    navigate({ to: dashboardPathFor(user.role) });
+    return;
+  }
     if (user.approvalStatus === "rejected") {
       supabase.from("profiles").select("rejection_reason").eq("id", user.id).maybeSingle()
         .then(({ data }) => setReason(data?.rejection_reason ?? null));
