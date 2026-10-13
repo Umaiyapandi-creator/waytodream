@@ -152,10 +152,14 @@ if (isFounder) {
 }
 
       // Normal users must be approved.
-      if (u.approvalStatus !== "approved") {
-        navigate({ to: "/pending" });
-        return;
-      }
+      // Innovators can enter directly without approval.
+ if (
+  u.role !== "innovator" &&
+  u.approvalStatus !== "approved"
+) {
+  navigate({ to: "/pending" });
+  return;
+}
 
       // Role protection.
       if (
