@@ -68,7 +68,7 @@ const CONTACTS = [
   { title: "Customer Service", email: "careofwaytodream@gmail.com" },
 ];
 
-type Section = "profile" | "projects" | "leaderboard" | "directors" | "feedback" | "founders" | "contact";
+type Section = "profile" | "projects" | "leaderboard" | "feedback" | "contact";
 
 type ProjectRow = {
   id: string;
@@ -352,8 +352,6 @@ const updateAccessRequest = async (
     { id: "profile", label: "Profile", icon: User },
     { id: "projects", label: "Projects", icon: FolderKanban },
     { id: "leaderboard", label: "Leaderboard", icon: Trophy },
-    { id: "directors", label: "Directors", icon: Award },
-    { id: "founders", label: "Founders", icon: Award },
     { id: "feedback", label: "Feedback", icon: MessageSquare },
     { id: "contact", label: "Contact", icon: Mail },
   ];
