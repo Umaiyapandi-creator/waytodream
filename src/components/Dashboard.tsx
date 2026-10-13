@@ -1,6 +1,25 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, Link } from "@tanstack/react-router";
-import { Menu, LogOut, Loader2, Mail, Award, MessageSquare, User, Camera, FolderKanban, Plus, FileText, Crown, Star, Trophy } from "lucide-react";
+import {
+  Menu,
+  LogOut,
+  Loader2,
+  Mail,
+  Award,
+  MessageSquare,
+  User,
+  Camera,
+  FolderKanban,
+  Plus,
+  FileText,
+  Crown,
+  Star,
+  Trophy,
+  Users,
+  CalendarDays,
+  HandCoins,
+  Code2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -68,7 +87,17 @@ const CONTACTS = [
   { title: "Customer Service", email: "careofwaytodream@gmail.com" },
 ];
 
-type Section = "profile" | "projects" | "leaderboard" | "feedback" | "contact";
+type Section =
+  | "profile"
+  | "projects"
+  | "leaderboard"
+  | "funders"
+  | "developers"
+  | "club"
+  | "competitions"
+  | "events"
+  | "feedback"
+  | "contact";
 
 type ProjectRow = {
   id: string;
@@ -349,12 +378,19 @@ const updateAccessRequest = async (
   }
 
   const navItems: { id: Section; label: string; icon: typeof User }[] = [
-    { id: "profile", label: "Profile", icon: User },
-    { id: "projects", label: "Projects", icon: FolderKanban },
-    { id: "leaderboard", label: "Leaderboard", icon: Trophy },
-    { id: "feedback", label: "Feedback", icon: MessageSquare },
-    { id: "contact", label: "Contact", icon: Mail },
-  ];
+  { id: "profile", label: "Profile", icon: User },
+  { id: "projects", label: "Projects", icon: FolderKanban },
+  { id: "leaderboard", label: "Leaderboard", icon: Trophy },
+
+  { id: "club", label: "Club Members and Leaders", icon: Users },
+  { id: "events", label: "Events", icon: CalendarDays },
+  { id: "funders", label: "Funders", icon: HandCoins },
+  { id: "competitions", label: "Competitions", icon: Award },
+  { id: "developers", label: "Developers", icon: Code2 },
+
+  { id: "feedback", label: "Feedback", icon: MessageSquare },
+  { id: "contact", label: "Contact", icon: Mail },
+];
 
   const AvatarCircle = ({ size = 64, clickable = false }: { size?: number; clickable?: boolean }) => (
     <button
@@ -724,6 +760,52 @@ const updateAccessRequest = async (
         )}
 
         {section === "leaderboard" && <Leaderboard />}
+        {section === "club" && (
+  <section>
+    <h2 className="mb-6 text-2xl font-bold">
+      Club Members and Leaders
+    </h2>
+    <div className="rounded-xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground">
+      Club members and leaders page will be implemented in the next step.
+    </div>
+  </section>
+)}
+
+{section === "events" && (
+  <section>
+    <h2 className="mb-6 text-2xl font-bold">Events</h2>
+    <div className="rounded-xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground">
+      Events page will be implemented in the next step.
+    </div>
+  </section>
+)}
+
+{section === "funders" && (
+  <section>
+    <h2 className="mb-6 text-2xl font-bold">Funders</h2>
+    <div className="rounded-xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground">
+      Funders page will be implemented in the next step.
+    </div>
+  </section>
+)}
+
+{section === "competitions" && (
+  <section>
+    <h2 className="mb-6 text-2xl font-bold">Competitions</h2>
+    <div className="rounded-xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground">
+      Competitions page will be implemented in the next step.
+    </div>
+  </section>
+)}
+
+{section === "developers" && (
+  <section>
+    <h2 className="mb-6 text-2xl font-bold">Developers</h2>
+    <div className="rounded-xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground">
+      Developer profiles and collaboration requests will be implemented in the next step.
+    </div>
+  </section>
+)}
         {section === "directors" && <CertGrid title="Directors" items={DIRECTORS} onOpen={setViewer} />}
         {section === "founders" && <CertGrid title="Founders" items={FOUNDERS} onOpen={setViewer} />}
 
