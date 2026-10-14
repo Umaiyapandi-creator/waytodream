@@ -414,21 +414,20 @@ const updateAccessRequest = async (
     </button>
   );
 
- const SidebarBody = (
-  <div className="flex h-full flex-col gap-4 overflow-hidden p-4">
 
-    <div className="rounded-xl border border-border bg-card p-4 text-center">
+const SidebarBody = (
+  <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden p-4">
+    <div className="shrink-0 rounded-xl border border-border bg-card p-4 text-center">
       <div className="mx-auto h-16 w-16">
         <AvatarCircle size={64} />
       </div>
-
       <div className="mt-2 font-semibold">{user.name}</div>
       <div className="text-xs text-muted-foreground">
         {industry || "Industry not set"}
       </div>
     </div>
 
-    <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto">
+    <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
       {navItems.map((n) => {
         const Icon = n.icon;
         const active = section === n.id;
@@ -440,32 +439,30 @@ const updateAccessRequest = async (
               setSection(n.id);
               setMenuOpen(false);
             }}
-            className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition ${
+            className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm transition ${
               active
                 ? "bg-primary text-primary-foreground"
                 : "text-foreground hover:bg-muted"
             }`}
           >
-            <Icon className="h-4 w-4" />
+            <Icon className="h-4 w-4 shrink-0" />
             {n.label}
           </button>
         );
       })}
     </nav>
-    </div>
 
-    {/* Logout - Contact கீழே */}
     <Button
       variant="outline"
-      className="gap-2"
+      className="w-full shrink-0 gap-2"
       onClick={logout}
     >
       <LogOut className="h-4 w-4" />
       Log out
     </Button>
-
   </div>
 );
+
 
   return (
     <div className="min-h-screen bg-muted/30">
