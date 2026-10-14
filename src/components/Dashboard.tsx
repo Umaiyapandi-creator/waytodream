@@ -415,7 +415,7 @@ const updateAccessRequest = async (
   );
 
  const SidebarBody = (
-  <div className="flex h-full flex-col gap-4 p-4">
+  <div className="flex h-full flex-col gap-4 overflow-hidden p-4">
 
     <div className="rounded-xl border border-border bg-card p-4 text-center">
       <div className="mx-auto h-16 w-16">
@@ -428,7 +428,7 @@ const updateAccessRequest = async (
       </div>
     </div>
 
-    <nav className="flex flex-col gap-1">
+    <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto">
       {navItems.map((n) => {
         const Icon = n.icon;
         const active = section === n.id;
@@ -452,6 +452,7 @@ const updateAccessRequest = async (
         );
       })}
     </nav>
+    </div>
 
     {/* Logout - Contact கீழே */}
     <Button
@@ -507,7 +508,7 @@ const updateAccessRequest = async (
       </header>
 
       <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
-        <SheetContent side="left" className="w-72 p-0">
+        <SheetContent side="left" className="h-dvh w-72 overflow-hidden p-0">
           <SheetHeader className="border-b border-border p-4">
             <SheetTitle>
               <Logo size={32} />
@@ -799,12 +800,13 @@ const updateAccessRequest = async (
 )}
 
 {section === "developers" && (
-  <section>
-    <h2 className="mb-6 text-2xl font-bold">Developers</h2>
-    <div className="rounded-xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground">
-      Developer profiles and collaboration requests will be implemented in the next step.
-    </div>
-  </section>
+  <DevelopersSection
+    currentUser={{
+      id: user.id,
+      name: user.name,
+      role: user.role,
+    }}
+  />
 )}
         {section === "directors" && <CertGrid title="Directors" items={DIRECTORS} onOpen={setViewer} />}
         {section === "founders" && <CertGrid title="Founders" items={FOUNDERS} onOpen={setViewer} />}
@@ -888,6 +890,797 @@ const updateAccessRequest = async (
     </div>
   );
 }
+        
+type DeveloperProfileRow = {
+  id: string;
+  full_name: string | null;
+  skills: string[];
+  experience_level: string | null;
+  bio: string | null;
+  portfolio_url: string | null;
+  github_url: string | null;
+};
+
+type CollaborationRow = {
+  id: string;
+  innovator_id: string;
+  developer_id: string;
+  project_id: number | null;
+  message: string | null;
+  status: "pending" | "accepted" | "rejected";
+  created_at: string;
+};
+
+type ChatMessageRow = {
+  id: string;
+  collaboration_id: string;
+  sender_id: string;
+  message: string;
+  created_at: string;
+};
+
+function DevelopersSection({
+  currentUser,
+}: {
+  currentUser: { id: string; name: string; role: string };
+}) {
+  const role = currentUser.role.toLowerCase();
+  const isDeveloper = role === "developer";
+  const isInnovator = role === "innovator";
+
+  const [profiles, setProfiles] = useState<DeveloperProfileRow[]>([]);
+  const [requests, setRequests] = useState<CollaborationRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  const [fullName, setFullName] = useState(currentUser.name ?? "");
+  const [skillsText, setSkillsText] = useState("");
+  const [experience, setExperience] = useState("");
+  const [bio, setBio] = useState("");
+  const [portfolioUrl, setPortfolioUrl] = useState("");
+  const [githubUrl, setGithubUrl] = useState("");
+  const [requestMessage, setRequestMessage] = useState("");
+
+  const [activeChat, setActiveChat] =
+    useState<CollaborationRow | null>(null);
+  const [messages, setMessages] = useState<ChatMessageRow[]>([]);
+  const [chatText, setChatText] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+  const [sendingMessage, setSendingMessage] = useState(false);
+
+  const loadData = async () => {
+    setLoading(true);
+
+    try {
+      const { data: developerRows, error: developerError } =
+        await supabase
+          .from("developer_profiles")
+          .select(
+            "id,full_name,skills,experience_level,bio,portfolio_url,github_url"
+          )
+          .order("created_at", { ascending: false });
+
+      if (developerError) throw developerError;
+
+      const list = (developerRows ?? []) as DeveloperProfileRow[];
+      setProfiles(list);
+
+      const mine = list.find((item) => item.id === currentUser.id);
+
+      if (mine) {
+        setFullName(mine.full_name ?? currentUser.name ?? "");
+        setSkillsText((mine.skills ?? []).join(", "));
+        setExperience(mine.experience_level ?? "");
+        setBio(mine.bio ?? "");
+        setPortfolioUrl(mine.portfolio_url ?? "");
+        setGithubUrl(mine.github_url ?? "");
+      }
+
+      const { data: requestRows, error: requestError } =
+        await supabase
+          .from("collaboration_requests")
+          .select("*")
+          .order("created_at", { ascending: false });
+
+      if (requestError) throw requestError;
+
+      setRequests((requestRows ?? []) as CollaborationRow[]);
+    } catch (error) {
+      console.error("DEVELOPER SECTION LOAD ERROR:", error);
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Could not load developer details"
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadData();
+  }, [currentUser.id]);
+  useEffect(() => {
+  if (!activeChat) return;
+
+  const channel = supabase
+    .channel(`collaboration-chat-${activeChat.id}`)
+    .on(
+      "postgres_changes",
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "messages",
+        filter: `collaboration_id=eq.${activeChat.id}`,
+      },
+      (payload) => {
+        const incoming = payload.new as ChatMessageRow;
+
+        setMessages((current) => {
+          if (current.some((message) => message.id === incoming.id)) {
+            return current;
+          }
+
+          return [...current, incoming].sort(
+            (a, b) =>
+              new Date(a.created_at).getTime() -
+              new Date(b.created_at).getTime()
+          );
+        });
+      }
+    )
+    .subscribe();
+
+  return () => {
+    void supabase.removeChannel(channel);
+  };
+}, [activeChat?.id]);
+
+  const saveDeveloperProfile = async () => {
+    if (!fullName.trim()) {
+      toast.error("Please enter your name.");
+      return;
+    }
+
+    const skills = skillsText
+      .split(",")
+      .map((skill) => skill.trim())
+      .filter(Boolean);
+
+    setSaving(true);
+
+    try {
+      const { error } = await supabase
+        .from("developer_profiles")
+        .upsert(
+          {
+            id: currentUser.id,
+            full_name: fullName.trim(),
+            skills,
+            experience_level: experience.trim() || null,
+            bio: bio.trim() || null,
+            portfolio_url: portfolioUrl.trim() || null,
+            github_url: githubUrl.trim() || null,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "id" }
+        );
+
+      if (error) throw error;
+
+      toast.success("Developer profile saved.");
+      await loadData();
+    } catch (error) {
+      console.error("SAVE DEVELOPER PROFILE ERROR:", error);
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Could not save developer profile"
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const sendCollaborationRequest = async (developerId: string) => {
+    if (!isInnovator) {
+      toast.error("Only innovators can send collaboration requests.");
+      return;
+    }
+
+    if (developerId === currentUser.id) {
+      toast.error("You cannot send a request to yourself.");
+      return;
+    }
+
+    const alreadySent = requests.some(
+      (request) =>
+        request.innovator_id === currentUser.id &&
+        request.developer_id === developerId
+    );
+
+    if (alreadySent) {
+      toast.error("You have already sent a request to this developer.");
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("collaboration_requests")
+      .insert({
+        innovator_id: currentUser.id,
+        developer_id: developerId,
+        project_id: null,
+        message: requestMessage.trim() || null,
+      })
+      .select("*")
+      .single();
+
+    if (error) {
+      console.error("COLLABORATION REQUEST ERROR:", error);
+      toast.error(error.message);
+      return;
+    }
+
+    setRequests((current) => [
+      data as CollaborationRow,
+      ...current,
+    ]);
+    setRequestMessage("");
+    toast.success("Collaboration request sent.");
+  };
+
+  const respondToRequest = async (
+    request: CollaborationRow,
+    status: "accepted" | "rejected"
+  ) => {
+    if (request.developer_id !== currentUser.id || !isDeveloper) {
+      toast.error("Only the requested developer can respond.");
+      return;
+    }
+
+    const { error } = await supabase
+      .from("collaboration_requests")
+      .update({
+        status,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", request.id)
+      .eq("developer_id", currentUser.id);
+
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+
+    setRequests((current) =>
+      current.map((item) =>
+        item.id === request.id ? { ...item, status } : item
+      )
+    );
+
+    if (status === "accepted") {
+      toast.success("Request accepted. Private chat is now available.");
+    } else {
+      toast.success("Collaboration request rejected.");
+    }
+  };
+
+  const openChat = async (request: CollaborationRow) => {
+    if (
+      request.status !== "accepted" ||
+      (request.innovator_id !== currentUser.id &&
+        request.developer_id !== currentUser.id)
+    ) {
+      toast.error("Chat is available only to accepted participants.");
+      return;
+    }
+
+    setActiveChat(request);
+    setChatLoading(true);
+
+    const { data, error } = await supabase
+      .from("messages")
+      .select("id,collaboration_id,sender_id,message,created_at")
+      .eq("collaboration_id", request.id)
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      console.error("CHAT LOAD ERROR:", error);
+      toast.error(error.message);
+      setMessages([]);
+    } else {
+      setMessages((data ?? []) as ChatMessageRow[]);
+    }
+
+    setChatLoading(false);
+  };
+
+  const sendChatMessage = async () => {
+    const message = chatText.trim();
+
+    if (!message || !activeChat || sendingMessage) return;
+
+    if (
+      activeChat.status !== "accepted" ||
+      (activeChat.innovator_id !== currentUser.id &&
+        activeChat.developer_id !== currentUser.id)
+    ) {
+      toast.error("You do not have permission to send this message.");
+      return;
+    }
+
+    setSendingMessage(true);
+
+    try {
+      const { data, error } = await supabase
+        .from("messages")
+        .insert({
+          collaboration_id: activeChat.id,
+          sender_id: currentUser.id,
+          message,
+        })
+        .select("id,collaboration_id,sender_id,message,created_at")
+        .single();
+
+      if (error) throw error;
+
+      setMessages((current) => [
+        ...current,
+        data as ChatMessageRow,
+      ]);
+      setChatText("");
+    } catch (error) {
+      console.error("SEND CHAT MESSAGE ERROR:", error);
+      toast.error(
+        error instanceof Error ? error.message : "Message could not be sent"
+      );
+    } finally {
+      setSendingMessage(false);
+    }
+  };
+
+  const myRequests = requests.filter(
+    (request) => request.innovator_id === currentUser.id
+  );
+
+  const incomingRequests = requests.filter(
+    (request) => request.developer_id === currentUser.id
+  );
+
+  const acceptedChats = requests.filter(
+    (request) =>
+      request.status === "accepted" &&
+      (request.innovator_id === currentUser.id ||
+        request.developer_id === currentUser.id)
+  );
+
+  const getDeveloperName = (id: string) =>
+    profiles.find((profile) => profile.id === id)?.full_name ??
+    "Developer";
+
+  if (loading) {
+    return (
+      <div className="grid place-items-center py-12">
+        <Loader2 className="h-5 w-5 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  return (
+    <section className="space-y-8">
+      <div>
+        <h2 className="text-2xl font-bold">Developers</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Discover developer skills and collaborate on ideas.
+        </p>
+      </div>
+
+      {isDeveloper && (
+        <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+          <h3 className="mb-4 text-lg font-semibold">
+            My Developer Profile
+          </h3>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm font-medium">
+                Full name
+              </label>
+              <Input
+                value={fullName}
+                onChange={(event) => setFullName(event.target.value)}
+                placeholder="Your name"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium">
+                Skills
+              </label>
+              <Input
+                value={skillsText}
+                onChange={(event) => setSkillsText(event.target.value)}
+                placeholder="Java, Python, React, SQL"
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Separate skills with commas.
+              </p>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium">
+                Experience level
+              </label>
+              <Input
+                value={experience}
+                onChange={(event) => setExperience(event.target.value)}
+                placeholder="Beginner, Intermediate, Experienced"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium">
+                GitHub URL
+              </label>
+              <Input
+                value={githubUrl}
+                onChange={(event) => setGithubUrl(event.target.value)}
+                placeholder="https://github.com/username"
+              />
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="mb-1 block text-sm font-medium">
+                Portfolio URL
+              </label>
+              <Input
+                value={portfolioUrl}
+                onChange={(event) => setPortfolioUrl(event.target.value)}
+                placeholder="https://your-portfolio.com"
+              />
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="mb-1 block text-sm font-medium">
+                About me
+              </label>
+              <Textarea
+                rows={4}
+                value={bio}
+                onChange={(event) => setBio(event.target.value)}
+                placeholder="Describe your skills and the projects you can help build."
+              />
+            </div>
+          </div>
+
+          <Button
+            className="mt-4"
+            onClick={saveDeveloperProfile}
+            disabled={saving}
+          >
+            {saving ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : null}
+            Save Developer Profile
+          </Button>
+        </div>
+      )}
+
+      {isInnovator && (
+        <div className="rounded-xl border border-border bg-card p-5">
+          <label className="mb-2 block text-sm font-medium">
+            Message to developers (optional)
+          </label>
+          <Textarea
+            rows={3}
+            value={requestMessage}
+            onChange={(event) => setRequestMessage(event.target.value)}
+            placeholder="Explain your idea and how you would like to collaborate."
+          />
+        </div>
+      )}
+
+      <div>
+        <h3 className="mb-4 text-lg font-semibold">Available Developers</h3>
+
+        {profiles.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+            No developer profiles yet. Developers can add their details above.
+          </div>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2">
+            {profiles.map((profile) => (
+              <div
+                key={profile.id}
+                className="rounded-xl border border-border bg-card p-5 shadow-sm"
+              >
+                <h4 className="text-lg font-semibold">
+                  {profile.full_name || "Developer"}
+                </h4>
+
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {profile.experience_level || "Experience not specified"}
+                </p>
+
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {(profile.skills ?? []).map((skill) => (
+                    <span
+                      key={skill}
+                      className="rounded-full bg-primary/10 px-2.5 py-1 text-xs text-primary"
+                    >
+                      {skill}
+                    </span>
+                  ))}
+                </div>
+
+                {profile.bio && (
+                  <p className="mt-3 whitespace-pre-wrap text-sm">
+                    {profile.bio}
+                  </p>
+                )}
+
+                <div className="mt-3 flex flex-wrap gap-3 text-sm">
+                  {profile.github_url && (
+                    <a
+                      href={profile.github_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary underline"
+                    >
+                      GitHub
+                    </a>
+                  )}
+                  {profile.portfolio_url && (
+                    <a
+                      href={profile.portfolio_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary underline"
+                    >
+                      Portfolio
+                    </a>
+                  )}
+                </div>
+
+                {isInnovator &&
+                  profile.id !== currentUser.id && (
+                    <Button
+                      className="mt-4"
+                      onClick={() =>
+                        sendCollaborationRequest(profile.id)
+                      }
+                      disabled={requests.some(
+                        (request) =>
+                          request.innovator_id === currentUser.id &&
+                          request.developer_id === profile.id
+                      )}
+                    >
+                      {requests.some(
+                        (request) =>
+                          request.innovator_id === currentUser.id &&
+                          request.developer_id === profile.id
+                      )
+                        ? "Request Already Sent"
+                        : "Request Collaboration"}
+                    </Button>
+                  )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {isInnovator && (
+        <div>
+          <h3 className="mb-3 text-lg font-semibold">My Requests</h3>
+          {myRequests.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              You have not sent any collaboration requests.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {myRequests.map((request) => (
+                <div
+                  key={request.id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card p-4"
+                >
+                  <div>
+                    <p className="font-medium">
+                      {getDeveloperName(request.developer_id)}
+                    </p>
+                    {request.message && (
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {request.message}
+                      </p>
+                    )}
+                  </div>
+                  <span className="text-sm font-medium capitalize">
+                    {request.status}
+                  </span>
+                  {request.status === "accepted" && (
+                    <Button
+                      size="sm"
+                      onClick={() => void openChat(request)}
+                    >
+                      Open Private Chat
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {isDeveloper && (
+        <div>
+          <h3 className="mb-3 text-lg font-semibold">
+            Incoming Collaboration Requests
+          </h3>
+
+          {incomingRequests.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              You have no collaboration requests yet.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {incomingRequests.map((request) => (
+                <div
+                  key={request.id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card p-4"
+                >
+                  <div>
+                    <p className="font-medium">Innovator request</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Innovator ID: {request.innovator_id}
+                    </p>
+                    {request.message && (
+                      <p className="mt-2 text-sm">{request.message}</p>
+                    )}
+                    <p className="mt-1 text-sm capitalize">
+                      Status: {request.status}
+                    </p>
+                  </div>
+
+                  {request.status === "pending" && (
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        onClick={() =>
+                          void respondToRequest(request, "accepted")
+                        }
+                      >
+                        Accept
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() =>
+                          void respondToRequest(request, "rejected")
+                        }
+                      >
+                        Reject
+                      </Button>
+                    </div>
+                  )}
+
+                  {request.status === "accepted" && (
+                    <Button
+                      size="sm"
+                      onClick={() => void openChat(request)}
+                    >
+                      Open Private Chat
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {acceptedChats.length > 0 && (
+        <div>
+          <h3 className="mb-3 text-lg font-semibold">Accepted Collaborations</h3>
+          <div className="space-y-2">
+            {acceptedChats.map((request) => (
+              <div
+                key={request.id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-3"
+              >
+                <span className="text-sm">
+                  Private collaboration · {request.id.slice(0, 8)}
+                </span>
+                <Button size="sm" onClick={() => void openChat(request)}>
+                  Open Chat
+                </Button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {activeChat && (
+        <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-semibold">Private Chat</h3>
+              <p className="text-xs text-muted-foreground">
+                Only the two collaboration participants can access this chat.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setActiveChat(null);
+                setMessages([]);
+              }}
+            >
+              Close Chat
+            </Button>
+          </div>
+
+          <div className="mb-4 max-h-80 space-y-3 overflow-y-auto rounded-lg bg-muted/40 p-3">
+            {chatLoading ? (
+              <Loader2 className="mx-auto h-5 w-5 animate-spin" />
+            ) : messages.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">
+                No messages yet. Start the conversation.
+              </p>
+            ) : (
+              messages.map((message) => {
+                const mine = message.sender_id === currentUser.id;
+
+                return (
+                  <div
+                    key={message.id}
+                    className={`flex ${mine ? "justify-end" : "justify-start"}`}
+                  >
+                    <div
+                      className={`max-w-[85%] rounded-xl px-3 py-2 text-sm ${
+                        mine
+                          ? "bg-primary text-primary-foreground"
+                          : "border border-border bg-card"
+                      }`}
+                    >
+                      <p className="whitespace-pre-wrap break-words">
+                        {message.message}
+                      </p>
+                      <p className="mt-1 text-[10px] opacity-70">
+                        {new Date(message.created_at).toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Textarea
+              rows={2}
+              value={chatText}
+              onChange={(event) => setChatText(event.target.value)}
+              placeholder="Type a message..."
+            />
+            <Button
+              onClick={() => void sendChatMessage()}
+              disabled={sendingMessage || !chatText.trim()}
+            >
+              {sendingMessage ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                "Send"
+              )}
+            </Button>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
 
 function CertGrid({
   title,
