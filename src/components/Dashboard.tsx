@@ -19,6 +19,8 @@ import {
   CalendarDays,
   HandCoins,
   Code2,
+  UserPlus,
+  BadgeCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -111,6 +113,27 @@ type ProjectRow = {
   created_at: string;
 };
 
+type ClubLeader = {
+  id: string;
+  user_id: string | null;
+  full_name: string;
+  email: string;
+  college: string;
+  department: string;
+  created_at: string;
+};
+
+type ClubMember = {
+  id: string;
+  leader_id: string;
+  full_name: string;
+  email: string;
+  college: string;
+  department: string;
+  created_at: string;
+};
+
+
 export function Dashboard() {
   const navigate = useNavigate();
   const { user, loading } = useAuth({ redirectIfUnauthed: true });
@@ -141,6 +164,197 @@ export function Dashboard() {
   Record<string, string>
 >({});
   const fileRef = useRef<HTMLInputElement>(null);
+  
+  const [clubLeaders, setClubLeaders] = useState<ClubLeader[]>([]);
+  const [clubMembers, setClubMembers] = useState<ClubMember[]>([]);
+  const [clubLoading, setClubLoading] = useState(false);
+  const [savingClub, setSavingClub] = useState(false);
+  const [selectedLeader, setSelectedLeader] =
+    useState<ClubLeader | null>(null);
+  const [showLeaderForm, setShowLeaderForm] = useState(false);
+  const [showMemberForm, setShowMemberForm] = useState(false);
+
+  const [leaderName, setLeaderName] = useState("");
+  const [leaderEmail, setLeaderEmail] = useState("");
+  const [leaderCollege, setLeaderCollege] = useState("");
+  const [leaderDepartment, setLeaderDepartment] = useState("");
+
+  const [memberName, setMemberName] = useState("");
+  const [memberEmail, setMemberEmail] = useState("");
+  const [memberCollege, setMemberCollege] = useState("");
+  const [memberDepartment, setMemberDepartment] = useState("");
+
+  const isFounder =
+    user?.role?.toLowerCase() === "founder" ||
+    user?.role?.toLowerCase() === "admin";
+
+  useEffect(() => {
+    if (!user || section !== "club") return;
+
+    let cancelled = false;
+
+    const loadClubData = async () => {
+      setClubLoading(true);
+
+      try {
+        const [leadersResult, membersResult] = await Promise.all([
+          supabase
+            .from("club_leaders")
+            .select(
+              "id,user_id,full_name,email,college,department,created_at"
+            )
+            .order("created_at", { ascending: false }),
+
+          supabase
+            .from("club_members")
+            .select(
+              "id,leader_id,full_name,email,college,department,created_at"
+            )
+            .order("created_at", { ascending: false }),
+        ]);
+
+        if (leadersResult.error) throw leadersResult.error;
+        if (membersResult.error) throw membersResult.error;
+
+        if (!cancelled) {
+          setClubLeaders((leadersResult.data ?? []) as ClubLeader[]);
+          setClubMembers((membersResult.data ?? []) as ClubMember[]);
+        }
+      } catch (error) {
+        console.error("CLUB DATA LOAD ERROR:", error);
+        if (!cancelled) {
+          toast.error(
+            error instanceof Error
+              ? error.message
+              : "Unable to load club data"
+          );
+        }
+      } finally {
+        if (!cancelled) setClubLoading(false);
+      }
+    };
+
+    void loadClubData();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, section]);
+
+  const addClubLeader = async () => {
+    if (!isFounder) {
+      toast.error("Only the founder can add club leaders.");
+      return;
+    }
+
+    if (
+      !leaderName.trim() ||
+      !leaderEmail.trim() ||
+      !leaderCollege.trim() ||
+      !leaderDepartment.trim()
+    ) {
+      toast.error("Please fill in all leader details.");
+      return;
+    }
+
+    setSavingClub(true);
+
+    try {
+      const { data, error } = await supabase
+        .from("club_leaders")
+        .insert({
+          full_name: leaderName.trim(),
+          email: leaderEmail.trim().toLowerCase(),
+          college: leaderCollege.trim(),
+          department: leaderDepartment.trim(),
+        })
+        .select(
+          "id,user_id,full_name,email,college,department,created_at"
+        )
+        .single();
+
+      if (error) throw error;
+
+      setClubLeaders((current) => [data as ClubLeader, ...current]);
+      setLeaderName("");
+      setLeaderEmail("");
+      setLeaderCollege("");
+      setLeaderDepartment("");
+      setShowLeaderForm(false);
+
+      toast.success("Club leader added successfully.");
+    } catch (error) {
+      console.error("ADD CLUB LEADER ERROR:", error);
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Unable to add club leader"
+      );
+    } finally {
+      setSavingClub(false);
+    }
+  };
+
+  const addClubMember = async () => {
+    if (
+      !user ||
+      !selectedLeader ||
+      user.role?.toLowerCase() !== "club_leader" ||
+      selectedLeader.user_id !== user.id
+    ) {
+      toast.error("Only this club's assigned leader can add members.");
+      return;
+    }
+
+    if (
+      !memberName.trim() ||
+      !memberEmail.trim() ||
+      !memberCollege.trim() ||
+      !memberDepartment.trim()
+    ) {
+      toast.error("Please fill in all member details.");
+      return;
+    }
+
+    setSavingClub(true);
+
+    try {
+      const { data, error } = await supabase
+        .from("club_members")
+        .insert({
+          leader_id: selectedLeader.id,
+          full_name: memberName.trim(),
+          email: memberEmail.trim().toLowerCase(),
+          college: memberCollege.trim(),
+          department: memberDepartment.trim(),
+        })
+        .select(
+          "id,leader_id,full_name,email,college,department,created_at"
+        )
+        .single();
+
+      if (error) throw error;
+
+      setClubMembers((current) => [data as ClubMember, ...current]);
+      setMemberName("");
+      setMemberEmail("");
+      setMemberCollege("");
+      setMemberDepartment("");
+      setShowMemberForm(false);
+
+      toast.success("Club member enrolled successfully.");
+    } catch (error) {
+      console.error("ADD CLUB MEMBER ERROR:", error);
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Unable to add club member"
+      );
+    } finally {
+      setSavingClub(false);
+    }
+  };
+
 
   useEffect(() => {
   if (!user || section !== "projects") return;
@@ -802,16 +1016,241 @@ const SidebarBody = (
         )}
 
         {section === "leaderboard" && <Leaderboard />}
-        {section === "club" && (
+      
+{section === "club" && (
   <section>
-    <h2 className="mb-6 text-2xl font-bold">
-      Club Members and Leaders
-    </h2>
-    <div className="rounded-xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground">
-      Club members and leaders page will be implemented in the next step.
+    <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h2 className="text-2xl font-bold">
+          Club Leaders Directory
+        </h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Browse club leaders and view their enrolled members.
+        </p>
+      </div>
+
+      {isFounder && (
+        <Button
+          className="gap-2"
+          onClick={() => {
+            setSelectedLeader(null);
+            setShowLeaderForm((value) => !value);
+          }}
+        >
+          <UserPlus className="h-4 w-4" />
+          Add Club Leader
+        </Button>
+      )}
     </div>
+
+    {isFounder && showLeaderForm && (
+      <div className="mb-6 rounded-xl border border-border bg-card p-5">
+        <h3 className="mb-4 text-lg font-semibold">
+          New Club Leader
+        </h3>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Input
+            placeholder="Leader full name"
+            value={leaderName}
+            onChange={(e) => setLeaderName(e.target.value)}
+          />
+          <Input
+            type="email"
+            placeholder="Leader email"
+            value={leaderEmail}
+            onChange={(e) => setLeaderEmail(e.target.value)}
+          />
+          <Input
+            placeholder="College name"
+            value={leaderCollege}
+            onChange={(e) => setLeaderCollege(e.target.value)}
+          />
+          <Input
+            placeholder="Department"
+            value={leaderDepartment}
+            onChange={(e) => setLeaderDepartment(e.target.value)}
+          />
+        </div>
+
+        <div className="mt-4 flex gap-2">
+          <Button onClick={addClubLeader} disabled={savingClub}>
+            {savingClub ? "Saving..." : "Save Club Leader"}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => setShowLeaderForm(false)}
+          >
+            Cancel
+          </Button>
+        </div>
+      </div>
+    )}
+
+    {clubLoading ? (
+      <div className="flex items-center gap-2 py-10 text-muted-foreground">
+        <Loader2 className="h-5 w-5 animate-spin" />
+        Loading club leaders...
+      </div>
+    ) : (
+      <>
+        {clubLeaders.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+            No club leaders added yet.
+          </div>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {clubLeaders.map((leader) => (
+              <button
+                type="button"
+                key={leader.id}
+                onClick={() => {
+                  setSelectedLeader(leader);
+                  setShowMemberForm(false);
+                }}
+                className={`rounded-xl border bg-card p-5 text-left transition hover:border-primary hover:shadow-md ${
+                  selectedLeader?.id === leader.id
+                    ? "border-primary ring-1 ring-primary"
+                    : "border-border"
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  <div className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
+                    <BadgeCheck className="h-6 w-6" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="font-semibold">{leader.full_name}</div>
+                    <div className="break-all text-xs text-muted-foreground">
+                      {leader.email}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 text-sm">
+                  <div>{leader.college}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {leader.department}
+                  </div>
+                  <div className="mt-3 text-xs font-medium text-primary">
+                    {clubMembers.filter(
+                      (member) => member.leader_id === leader.id
+                    ).length}{" "}
+                    enrolled members · View profile →
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </>
+    )}
+
+    {selectedLeader && (
+      <div className="mt-8 rounded-xl border border-border bg-card p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 className="text-xl font-bold">
+              {selectedLeader.full_name}
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              {selectedLeader.college} · {selectedLeader.department}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {selectedLeader.email}
+            </p>
+          </div>
+
+          {user.role?.toLowerCase() === "club_leader" &&
+            selectedLeader.user_id === user.id && (
+              <Button
+                className="gap-2"
+                onClick={() => setShowMemberForm((value) => !value)}
+              >
+                <UserPlus className="h-4 w-4" />
+                Add Members
+              </Button>
+            )}
+        </div>
+
+        {showMemberForm &&
+          user.role?.toLowerCase() === "club_leader" &&
+          selectedLeader.user_id === user.id && (
+            <div className="mt-5 rounded-lg border p-4">
+              <h4 className="mb-3 font-semibold">Enroll a Member</h4>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Input
+                  placeholder="Member full name"
+                  value={memberName}
+                  onChange={(e) => setMemberName(e.target.value)}
+                />
+                <Input
+                  type="email"
+                  placeholder="Member email"
+                  value={memberEmail}
+                  onChange={(e) => setMemberEmail(e.target.value)}
+                />
+                <Input
+                  placeholder="College name"
+                  value={memberCollege}
+                  onChange={(e) => setMemberCollege(e.target.value)}
+                />
+                <Input
+                  placeholder="Department"
+                  value={memberDepartment}
+                  onChange={(e) => setMemberDepartment(e.target.value)}
+                />
+              </div>
+
+              <Button
+                className="mt-4"
+                onClick={addClubMember}
+                disabled={savingClub}
+              >
+                {savingClub ? "Saving..." : "Enroll Member"}
+              </Button>
+            </div>
+          )}
+
+        <div className="mt-6">
+          <h4 className="mb-3 font-semibold">
+            Enrolled Club Members
+          </h4>
+
+          {clubMembers.filter(
+            (member) => member.leader_id === selectedLeader.id
+          ).length === 0 ? (
+            <p className="rounded-lg border border-dashed p-5 text-sm text-muted-foreground">
+              No members enrolled under this leader yet.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {clubMembers
+                .filter(
+                  (member) => member.leader_id === selectedLeader.id
+                )
+                .map((member) => (
+                  <div
+                    key={member.id}
+                    className="rounded-lg border p-4"
+                  >
+                    <div className="font-medium">{member.full_name}</div>
+                    <div className="text-sm text-muted-foreground">
+                      {member.email}
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {member.college} · {member.department}
+                    </div>
+                  </div>
+                ))}
+            </div>
+          )}
+        </div>
+      </div>
+    )}
   </section>
 )}
+
 
 {section === "events" && (
   <section>
