@@ -988,6 +988,39 @@ function DevelopersSection({
   const [chatText, setChatText] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const [sendingMessage, setSendingMessage] = useState(false);
+  useEffect(() => {
+  if (!activeChat?.id) return;
+
+  const channel = supabase
+    .channel(`chat-${activeChat.id}`)
+    .on(
+      "postgres_changes",
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "messages",
+        filter: `collaboration_id=eq.${activeChat.id}`,
+      },
+      (payload) => {
+        const newMessage = payload.new as ChatMessageRow;
+
+        setMessages((current) => {
+          if (current.some((item) => item.id === newMessage.id)) {
+            return current;
+          }
+
+          return [...current, newMessage];
+        });
+      }
+    )
+    .subscribe((status) => {
+      console.log("Chat realtime status:", status);
+    });
+
+  return () => {
+    void supabase.removeChannel(channel);
+  };
+}, [activeChat?.id]);
 
   const loadData = async () => {
     setLoading(true);
