@@ -291,6 +291,50 @@ useEffect(() => {
         }
       });
   }, [user]);
+  
+useEffect(() => {
+  if (!user || user.role?.toLowerCase() !== "developer") return;
+
+  let cancelled = false;
+
+  const checkProfile = async () => {
+    const { data, error } = await supabase
+      .from("developer_profiles")
+      .select(
+        "full_name, skills, experience_level, bio, github_url, portfolio_url"
+      )
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (cancelled) return;
+
+    if (error) {
+      console.error("DEVELOPER PROFILE CHECK ERROR:", error);
+      toast.error("Unable to check developer profile.");
+      return;
+    }
+
+    const complete =
+      !!data?.full_name?.trim() &&
+      Array.isArray(data?.skills) &&
+      data.skills.some((skill) => skill.trim().length > 0) &&
+      !!data?.experience_level?.trim() &&
+      !!data?.bio?.trim() &&
+      !!data?.github_url?.trim() &&
+      !!data?.portfolio_url?.trim();
+
+    if (!complete) {
+      setSection("developers");
+    }
+  };
+
+  void checkProfile();
+
+  return () => {
+    cancelled = true;
+  };
+}, [user?.id, user?.role]);
+
 
   const logout = async () => {
     await signOut();
@@ -1034,10 +1078,29 @@ function DevelopersSection({
 }, [activeChat?.id]);
 
   const saveDeveloperProfile = async () => {
-    if (!fullName.trim()) {
-      toast.error("Please enter your name.");
-      return;
-    }
+    
+if (
+  !fullName.trim() ||
+  !skillsText.trim() ||
+  !experience.trim() ||
+  !bio.trim() ||
+  !githubUrl.trim() ||
+  !portfolioUrl.trim()
+) {
+  toast.error("Please complete all required profile fields.");
+  return;
+}
+
+const skills = skillsText
+  .split(",")
+  .map((skill) => skill.trim())
+  .filter(Boolean);
+
+if (skills.length === 0) {
+  toast.error("Please enter at least one skill.");
+  return;
+}
+
 
     const skills = skillsText
       .split(",")
@@ -1047,26 +1110,29 @@ function DevelopersSection({
     setSaving(true);
 
     try {
-      const { error } = await supabase
-        .from("developer_profiles")
-        .upsert(
-          {
-            id: currentUser.id,
-            full_name: fullName.trim(),
-            skills,
-            experience_level: experience.trim() || null,
-            bio: bio.trim() || null,
-            portfolio_url: portfolioUrl.trim() || null,
-            github_url: githubUrl.trim() || null,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "id" }
-        );
+      
+const { error } = await supabase
+  .from("developer_profiles")
+  .upsert(
+    {
+      id: currentUser.id,
+      full_name: fullName.trim(),
+      skills,
+      experience_level: experience.trim(),
+      bio: bio.trim(),
+      github_url: githubUrl.trim(),
+      portfolio_url: portfolioUrl.trim(),
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "id" }
+  );
 
-      if (error) throw error;
+if (error) throw error;
 
-      toast.success("Developer profile saved.");
-      await loadData();
+toast.success("Developer profile saved.");
+await loadData();
+
+      
     } catch (error) {
       console.error("SAVE DEVELOPER PROFILE ERROR:", error);
       toast.error(
@@ -1284,6 +1350,7 @@ function DevelopersSection({
                 Full name
               </label>
               <Input
+                required
                 value={fullName}
                 onChange={(event) => setFullName(event.target.value)}
                 placeholder="Your name"
@@ -1295,6 +1362,7 @@ function DevelopersSection({
                 Skills
               </label>
               <Input
+                required
                 value={skillsText}
                 onChange={(event) => setSkillsText(event.target.value)}
                 placeholder="Java, Python, React, SQL"
@@ -1309,6 +1377,7 @@ function DevelopersSection({
                 Experience level
               </label>
               <Input
+                required
                 value={experience}
                 onChange={(event) => setExperience(event.target.value)}
                 placeholder="Beginner, Intermediate, Experienced"
@@ -1320,6 +1389,7 @@ function DevelopersSection({
                 GitHub URL
               </label>
               <Input
+                required
                 value={githubUrl}
                 onChange={(event) => setGithubUrl(event.target.value)}
                 placeholder="https://github.com/username"
@@ -1331,6 +1401,7 @@ function DevelopersSection({
                 Portfolio URL
               </label>
               <Input
+                required
                 value={portfolioUrl}
                 onChange={(event) => setPortfolioUrl(event.target.value)}
                 placeholder="https://your-portfolio.com"
