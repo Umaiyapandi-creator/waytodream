@@ -1077,70 +1077,62 @@ function DevelopersSection({
   };
 }, [activeChat?.id]);
 
-  const saveDeveloperProfile = async () => {
-    
-if (
-  !fullName.trim() ||
-  !skillsText.trim() ||
-  !experience.trim() ||
-  !bio.trim() ||
-  !githubUrl.trim() ||
-  !portfolioUrl.trim()
-) {
-  toast.error("Please complete all required profile fields.");
-  return;
-}
+  
+const saveDeveloperProfile = async () => {
+  // First, declare skills before using it
+  const skills = skillsText
+    .split(",")
+    .map((skill) => skill.trim())
+    .filter(Boolean);
 
+  // Validate all required fields
+  if (
+    !fullName.trim() ||
+    skills.length === 0 ||
+    !experience.trim() ||
+    !bio.trim() ||
+    !githubUrl.trim() ||
+    !portfolioUrl.trim()
+  ) {
+    toast.error("Please complete all required profile fields.");
+    return;
+  }
 
+  setSaving(true);
 
-if (skills.length === 0) {
-  toast.error("Please enter at least one skill.");
-  return;
-}
-
-
-    const skills = skillsText
-      .split(",")
-      .map((skill) => skill.trim())
-      .filter(Boolean);
-
-    setSaving(true);
-
-    try {
-      
-const { error } = await supabase
-  .from("developer_profiles")
-  .upsert(
-    {
-      id: currentUser.id,
-      full_name: fullName.trim(),
-      skills,
-      experience_level: experience.trim(),
-      bio: bio.trim(),
-      github_url: githubUrl.trim(),
-      portfolio_url: portfolioUrl.trim(),
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "id" }
-  );
-
-if (error) throw error;
-
-toast.success("Developer profile saved.");
-await loadData();
-
-      
-    } catch (error) {
-      console.error("SAVE DEVELOPER PROFILE ERROR:", error);
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "Could not save developer profile"
+  try {
+    const { error } = await supabase
+      .from("developer_profiles")
+      .upsert(
+        {
+          id: currentUser.id,
+          full_name: fullName.trim(),
+          skills,
+          experience_level: experience.trim(),
+          bio: bio.trim(),
+          github_url: githubUrl.trim(),
+          portfolio_url: portfolioUrl.trim(),
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "id" }
       );
-    } finally {
-      setSaving(false);
-    }
-  };
+
+    if (error) throw error;
+
+    toast.success("Developer profile saved.");
+    await loadData();
+  } catch (error) {
+    console.error("SAVE DEVELOPER PROFILE ERROR:", error);
+    toast.error(
+      error instanceof Error
+        ? error.message
+        : "Could not save developer profile"
+    );
+  } finally {
+    setSaving(false);
+  }
+};
+
 
   const sendCollaborationRequest = async (developerId: string) => {
     if (!isInnovator) {
