@@ -1247,7 +1247,7 @@ const SidebarBody = (
             </div>
           )}
 
-        <div className="mt-6">
+                <div className="mt-6">
           <h4 className="mb-3 font-semibold">
             Enrolled Club Members
           </h4>
@@ -1282,19 +1282,17 @@ const SidebarBody = (
           )}
         </div>
       </div>
-    )}
-  </section>
-)}
+    </section>
+  )}
 
-
-{section === "events" && (
-  <section>
-    <h2 className="mb-6 text-2xl font-bold">Events</h2>
-    <div className="rounded-xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground">
-      Events page will be implemented in the next step.
-    </div>
-  </section>
-)}
+  {section === "events" && (
+    <section>
+      <h2 className="mb-6 text-2xl font-bold">Events</h2>
+      <div className="rounded-xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground">
+        Events page will be implemented in the next step.
+      </div>
+    </section>
+  )}
 
 {section === "funders" && (
   <section>
