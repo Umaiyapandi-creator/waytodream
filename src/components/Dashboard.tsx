@@ -294,17 +294,36 @@ export function Dashboard() {
       setSavingClub(false);
     }
   };
+   const addClubMember = async () => {
+  if (!user || !selectedLeader) {
+    toast.error("Please select a club leader.");
+    return;
+  }
 
-  const addClubMember = async () => {
-    if (
-      !user ||
-      !selectedLeader ||
-      user.role?.toLowerCase() !== "club_leader" ||
-      selectedLeader.user_id !== user.id
-    ) {
-      toast.error("Only this club's assigned leader can add members.");
-      return;
-    }
+  // Verify the logged-in user's email using Supabase Auth
+  const { data: authData, error: authError } =
+    await supabase.auth.getUser();
+
+  if (authError || !authData.user?.email_confirmed_at) {
+    toast.error("Please verify your email first.");
+    return;
+  }
+
+  const loggedInEmail = authData.user.email
+    ?.trim()
+    .toLowerCase();
+
+  const leaderEmail = selectedLeader.email
+    .trim()
+    .toLowerCase();
+
+  if (!loggedInEmail || loggedInEmail !== leaderEmail) {
+    toast.error("Your verified email is not a Club Leader email.");
+    return;
+  }
+
+  // Keep your existing member validation and insert code below.
+
 
     if (
       !memberName.trim() ||
@@ -1160,21 +1179,37 @@ const SidebarBody = (
             </p>
           </div>
 
-          {user.role?.toLowerCase() === "club_leader" &&
-            selectedLeader.user_id === user.id && (
-              <Button
-                className="gap-2"
-                onClick={() => setShowMemberForm((value) => !value)}
-              >
-                <UserPlus className="h-4 w-4" />
-                Add Members
-              </Button>
-            )}
-        </div>
+          {user.email &&
+  user.email.trim().toLowerCase() ===
+    selectedLeader.email.trim().toLowerCase() && (
+      <Button
+        className="gap-2"
+        onClick={async () => {
+          const { data, error } = await supabase.auth.getUser();
 
-        {showMemberForm &&
-          user.role?.toLowerCase() === "club_leader" &&
-          selectedLeader.user_id === user.id && (
+          if (
+            error ||
+            !data.user?.email_confirmed_at ||
+            data.user.email?.trim().toLowerCase() !==
+              selectedLeader.email.trim().toLowerCase()
+          ) {
+            toast.error(
+              "Please verify the Club Leader email before adding members."
+            );
+            return;
+          }
+
+          setShowMemberForm((value) => !value);
+        }}
+      >
+        <UserPlus className="h-4 w-4" />
+        Add Members
+      </Button>
+    )}
+
+         {showMemberForm &&
+  user.email?.trim().toLowerCase() ===
+    selectedLeader.email.trim().toLowerCase() && (
             <div className="mt-5 rounded-lg border p-4">
               <h4 className="mb-3 font-semibold">Enroll a Member</h4>
 
