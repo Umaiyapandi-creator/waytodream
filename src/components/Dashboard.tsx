@@ -1091,10 +1091,7 @@ if (
   return;
 }
 
-const skills = skillsText
-  .split(",")
-  .map((skill) => skill.trim())
-  .filter(Boolean);
+
 
 if (skills.length === 0) {
   toast.error("Please enter at least one skill.");
