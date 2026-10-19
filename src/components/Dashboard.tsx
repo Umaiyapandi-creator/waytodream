@@ -1163,6 +1163,7 @@ const SidebarBody = (
         )}
       </>
     )}
+ 
 
     {selectedLeader && (
       <div className="mt-8 rounded-xl border border-border bg-card p-5">
@@ -1282,8 +1283,8 @@ const SidebarBody = (
           )}
         </div>
       </div>
-    </div>
-    </section>
+    )}
+  </section>
   )}
 
   {section === "events" && (
@@ -1293,7 +1294,7 @@ const SidebarBody = (
         Events page will be implemented in the next step.
       </div>
     </section>
-  )}
+  )}   
 
 {section === "funders" && (
   <section>
