@@ -1282,6 +1282,7 @@ const SidebarBody = (
           )}
         </div>
       </div>
+    </div>
     </section>
   )}
 
